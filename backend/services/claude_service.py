@@ -1,18 +1,24 @@
 import os
 import json
 import logging
-from google import genai
-from google.genai import types
+from openai import AsyncOpenAI
 from models.schemas import ClaudePromptContext, GenerateResponse, ToolSchema
 
 logger = logging.getLogger(__name__)
 
+# Groq uses the OpenAI-compatible API
+def _get_client() -> AsyncOpenAI:
+    return AsyncOpenAI(
+        api_key=os.getenv("GROQ_API_KEY", ""),
+        base_url="https://api.groq.com/openai/v1"
+    )
+
 async def generate_mcp_server(context: ClaudePromptContext) -> GenerateResponse:
-    # Initialize the Gemini client instead of Anthropic
-    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
-    
+    client = _get_client()
+    model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
     endpoints_json = [e.model_dump() for e in context.endpoints]
-    
+
     system_prompt = """You are an expert engineering assistant.
 Your task is to analyze network intercepts (HAR endpoints) and generate a fully functional Model Context Protocol (MCP) server using the `fastmcp` library in Python.
 The server should help the user achieve their specific task.
@@ -54,36 +60,38 @@ Here are the filtered network endpoints observed:
 Generate the required JSON output."""
 
     try:
-        response = await client.aio.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=user_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=0.2,
-            )
+        response = await client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.2,
+            max_tokens=4000, 
         )
-        
-        response_text = response.text
-        
-        # Clean up in case Gemini outputs markdown despite instructions
-        if response_text.strip().startswith("```json"):
-            response_text = response_text.strip()[7:]
-            if response_text.endswith("```"):
-                response_text = response_text[:-3]
-        elif response_text.strip().startswith("```"):
-            response_text = response_text.strip()[3:]
-            if response_text.endswith("```"):
-                response_text = response_text[:-3]
-                
-        data = json.loads(response_text.strip())
-        
+
+        response_text = response.choices[0].message.content or ""
+
+        # Strip markdown code fences if the model wraps the output anyway
+        stripped = response_text.strip()
+        if stripped.startswith("```json"):
+            stripped = stripped[7:]
+            if stripped.endswith("```"):
+                stripped = stripped[:-3]
+        elif stripped.startswith("```"):
+            stripped = stripped[3:]
+            if stripped.endswith("```"):
+                stripped = stripped[:-3]
+
+        data = json.loads(stripped.strip())
+
         return GenerateResponse(
             server_code=data["server_code"],
             tools=[ToolSchema(**t) for t in data["tools"]],
             install_command=data["install_command"],
             claude_config=data["claude_config"],
-            readme=data["readme"]
+            readme=data["readme"],
         )
     except Exception as e:
-        logger.error(f"Failed to generate MCP server via Gemini: {str(e)}")
+        logger.error(f"Failed to generate MCP server via Groq ({model}): {str(e)}")
         raise e

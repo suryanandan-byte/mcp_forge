@@ -6,8 +6,9 @@ import os
 
 from routers import generate, registry
 
-# Load environment variables (mostly for GEMINI_API_KEY)
-load_dotenv(override=True)
+# Load environment variables from the same directory as main.py
+env_path = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(dotenv_path=env_path, override=True)
 
 app = FastAPI(
     title="MCP Forge API",
