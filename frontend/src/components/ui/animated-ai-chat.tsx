@@ -17,6 +17,9 @@ import {
   Check,
   AlertCircle,
   RefreshCw,
+  Archive,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -26,6 +29,7 @@ import {
   type GenerateResponse,
   type RegistryServerItem,
 } from "@/lib/api";
+import JSZip from "jszip";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Sub-components
@@ -50,18 +54,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
   );
 }
 
-function DownloadButton({ href, filename }: { href: string; filename: string }) {
-  return (
-    <a
-      href={href}
-      download={filename}
-      className="flex items-center gap-1 text-[10px] text-white/40 hover:text-white/80 transition-colors"
-    >
-      <Download className="w-3 h-3" />
-      Download
-    </a>
-  );
-}
+// (DownloadButton removed in favor of Zip download)
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Result output cards (rendered after generation)
@@ -76,31 +69,56 @@ function ResultCards({
 }) {
   const configJson = JSON.stringify(result.claude_config, null, 2);
 
-  const pyBlob = new Blob([result.server_code], { type: "text/x-python" });
-  const pyUrl = URL.createObjectURL(pyBlob);
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: "easeOut" }}
-      className="w-full grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6"
+      className="w-full flex flex-col gap-6 mt-6"
     >
-      {/* Card 1 — Python server file */}
-      <div className="flex flex-col gap-3 p-6 rounded-3xl bg-white/[0.02] border border-white/[0.08] hover:bg-white/[0.03] transition-colors relative group min-h-[180px]">
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-3xl pointer-events-none" />
-        <div className="flex items-center justify-between border-b border-white/5 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-violet-500/10 text-violet-300">
-              <FileCode2 className="w-5 h-5" />
+      <div className="flex items-center justify-between w-full mb-2">
+        <h3 className="text-white/80 font-heading font-medium tracking-wide text-sm flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-violet-400" />
+          Generation Complete
+        </h3>
+        <button
+          onClick={async () => {
+            const zip = new JSZip();
+            zip.file(`${serverName}_mcp.py`, result.server_code);
+            zip.file(`claude_config.json`, JSON.stringify(result.claude_config, null, 2));
+            zip.file(`README.md`, result.readme);
+            const content = await zip.generateAsync({ type: "blob" });
+            const url = URL.createObjectURL(content);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${serverName}_mcp_bundle.zip`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }}
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-b from-white/10 to-white/5 hover:from-white/20 hover:to-white/10 border border-white/10 text-white rounded-xl text-xs font-semibold transition-all shadow-sm"
+        >
+          <Archive className="w-4 h-4" />
+          Download ZIP
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Card 1 — Python server file */}
+        <div className="flex flex-col gap-3 p-6 rounded-3xl bg-white/[0.02] border border-white/[0.08] hover:bg-white/[0.03] transition-colors relative group min-h-[180px]">
+          <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-3xl pointer-events-none" />
+          <div className="flex items-center justify-between border-b border-white/5 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-violet-500/10 text-violet-300">
+                <FileCode2 className="w-5 h-5" />
+              </div>
+              <div className="font-heading font-medium text-sm">The AI Tool</div>
             </div>
-            <div className="font-heading font-medium text-sm">The AI Tool</div>
+            <div className="flex items-center gap-3">
+              <CopyButton text={result.server_code} />
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <CopyButton text={result.server_code} />
-            <DownloadButton href={pyUrl} filename={`${serverName}_mcp.py`} />
-          </div>
-        </div>
         <div className="text-xs font-mono text-white/40 truncate">{serverName}_mcp.py</div>
         <pre className="text-[10px] font-mono text-white/30 leading-relaxed overflow-hidden max-h-24 text-ellipsis whitespace-pre-wrap break-all">
           {result.server_code.slice(0, 350)}…
@@ -145,6 +163,7 @@ function ResultCards({
         <p className="text-[10px] text-white/30 leading-relaxed overflow-hidden max-h-24 whitespace-pre-wrap break-all">
           {result.readme.slice(0, 350)}…
         </p>
+      </div>
       </div>
     </motion.div>
   );
@@ -339,8 +358,8 @@ export function AnimatedAIChat() {
   const [result, setResult] = useState<GenerateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const isReservePage =
-    typeof window !== "undefined" && window.location.pathname === "/mcp-reserve";
+  const [activeView, setActiveView] = useState<"home" | "reserve">("home");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -376,38 +395,59 @@ export function AnimatedAIChat() {
   return (
     <div className="flex h-screen w-full bg-black text-white font-sans overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-64 border-r border-white/5 bg-white/[0.01] flex flex-col p-6 z-20 shrink-0">
-        <div className="mb-10 pl-2">
-          <h2 className="text-xl font-heading font-black tracking-widest text-neutral-200 select-none">
-            MCP<span className="text-transparent bg-clip-text bg-gradient-to-b from-white to-neutral-500">FORGE</span>
+      <aside
+        className={cn(
+          "border-r border-white/5 bg-white/[0.01] flex flex-col p-6 z-20 shrink-0 transition-all duration-300 relative",
+          isSidebarOpen ? "w-64" : "w-20 items-center px-4"
+        )}
+      >
+        <button
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          className="absolute -right-3 top-8 w-6 h-6 bg-neutral-900 border border-white/10 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-neutral-800 transition-colors z-30"
+        >
+          {isSidebarOpen ? <PanelLeftClose className="w-3.5 h-3.5" /> : <PanelLeftOpen className="w-3.5 h-3.5" />}
+        </button>
+
+        <div className={cn("mb-10", isSidebarOpen ? "pl-2" : "flex justify-center")}>
+          <h2 className="text-xl font-heading font-black tracking-widest text-neutral-200 select-none flex items-center">
+            <span className={cn(isSidebarOpen ? "block" : "hidden")}>
+              MCP<span className="text-transparent bg-clip-text bg-gradient-to-b from-white to-neutral-500">FORGE</span>
+            </span>
+            <span className={cn(!isSidebarOpen ? "block font-black text-2xl tracking-tighter" : "hidden")}>
+              M<span className="text-neutral-500">F</span>
+            </span>
           </h2>
         </div>
 
-        <nav className="flex flex-col gap-2">
-          <a
-            href="/"
+        <nav className="flex flex-col gap-2 w-full">
+          <button
+            onClick={() => setActiveView("home")}
             className={cn(
-              "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300",
-              !isReservePage
+              "flex items-center rounded-xl text-sm font-medium transition-all duration-300 w-full",
+              isSidebarOpen ? "px-4 py-3 gap-3 justify-start" : "p-3 justify-center",
+              activeView === "home"
                 ? "bg-white/10 text-white shadow-sm"
                 : "text-white/40 hover:bg-white/5 hover:text-white/80"
             )}
+            title={!isSidebarOpen ? "Home" : undefined}
           >
-            <Home className="w-4 h-4" />
-            Home
-          </a>
-          <a
-            href="/mcp-reserve"
+            <Home className="w-4 h-4 shrink-0" />
+            {isSidebarOpen && <span>Home</span>}
+          </button>
+          <button
+            onClick={() => setActiveView("reserve")}
             className={cn(
-              "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300",
-              isReservePage
+              "flex items-center rounded-xl text-sm font-medium transition-all duration-300 w-full",
+              isSidebarOpen ? "px-4 py-3 gap-3 justify-start" : "p-3 justify-center",
+              activeView === "reserve"
                 ? "bg-white/10 text-white shadow-sm"
                 : "text-white/40 hover:bg-white/5 hover:text-white/80"
             )}
+            title={!isSidebarOpen ? "MCP Reserve" : undefined}
           >
-            <Server className="w-4 h-4" />
-            MCP Reserve
-          </a>
+            <Server className="w-4 h-4 shrink-0" />
+            {isSidebarOpen && <span>MCP Reserve</span>}
+          </button>
         </nav>
       </aside>
 
@@ -438,7 +478,7 @@ export function AnimatedAIChat() {
           </motion.div>
 
           {/* ── Page content ── */}
-          {isReservePage ? (
+          {activeView === "reserve" ? (
             <ReservePage />
           ) : (
             <>
@@ -534,17 +574,37 @@ export function AnimatedAIChat() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
-                  className="relative backdrop-blur-3xl bg-white/[0.02] rounded-3xl border border-white/[0.05] shadow-xl p-2 transition-all focus-within:border-white/20 focus-within:bg-white/[0.03]"
+                  className="relative backdrop-blur-3xl bg-white/[0.02] rounded-3xl border border-white/[0.05] shadow-xl p-2 transition-all focus-within:border-white/20 focus-within:bg-white/[0.03] overflow-hidden"
                 >
+                  <AnimatePresence>
+                    {isGenerating && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 bg-black/60 backdrop-blur-md rounded-3xl z-20 flex flex-col items-center justify-center gap-4 border border-white/[0.05]"
+                      >
+                        <div className="w-8 h-8 rounded-full border-[3px] border-white/20 border-t-violet-400 animate-spin" />
+                        <motion.div
+                          animate={{ opacity: [0.5, 1, 0.5] }}
+                          transition={{ repeat: Infinity, duration: 2 }}
+                          className="font-mono text-xs tracking-widest text-violet-200/80 uppercase"
+                        >
+                          Processing HAR & Generating
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  
                   <textarea
                     ref={textareaRef}
                     value={taskDesc}
                     onChange={(e) => setTaskDesc(e.target.value)}
                     placeholder="Describe your task here…"
-                    className="w-full min-h-[100px] h-auto resize-y bg-transparent border-none text-white/90 text-sm focus:outline-none placeholder:text-white/30 p-4 leading-relaxed"
+                    className="w-full min-h-[100px] h-auto resize-y bg-transparent border-none text-white/90 text-sm focus:outline-none placeholder:text-white/30 p-4 leading-relaxed relative z-10"
                     disabled={isGenerating}
                   />
-                  <div className="flex justify-between items-center px-2 pb-2 pt-2">
+                  <div className="flex justify-between items-center px-2 pb-2 pt-2 relative z-10">
                     <span className="text-[10px] text-white/20 pl-2">{taskDesc.length} chars</span>
                     <motion.button
                       onClick={handleGenerate}
@@ -563,7 +623,7 @@ export function AnimatedAIChat() {
                       {isGenerating ? (
                         <>
                           <div className="w-3 h-3 rounded-full border border-white/20 border-t-white/80 animate-spin" />
-                          Generating…
+                          Generating...
                         </>
                       ) : (
                         <>
