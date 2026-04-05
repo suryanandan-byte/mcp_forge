@@ -49,7 +49,14 @@ def is_api_endpoint(url: str, mime_type: str, req_type: str) -> bool:
     return False
 
 def extract_headers(har_headers: List[Dict[str, str]]) -> Dict[str, str]:
-    return {h["name"]: h["value"] for h in har_headers}
+    useful = {}
+    ignore = ["accept", "accept-encoding", "accept-language", "connection", "host", 
+              "origin", "referer", "user-agent", "content-length", "cookie", "dnt", "pragma", "cache-control"]
+    for h in har_headers:
+        name = h["name"].lower()
+        if name not in ignore and not name.startswith("sec-"):
+            useful[h["name"]] = h["value"]
+    return useful
 
 def parse_har_file(content: str) -> List[HAREndpoint]:
     try:
@@ -88,7 +95,7 @@ def parse_har_file(content: str) -> List[HAREndpoint]:
         
         response_body = response.get("content", {}).get("text", "")
         if response_body:
-            response_body = response_body[:500]
+            response_body = response_body[:150]
 
         endpoint = HAREndpoint(
             method=method,
@@ -100,4 +107,4 @@ def parse_har_file(content: str) -> List[HAREndpoint]:
         )
         endpoints.append(endpoint)
 
-    return endpoints[:30]
+    return endpoints[:10]
