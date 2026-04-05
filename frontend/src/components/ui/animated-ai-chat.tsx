@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import {
   UploadCloud,
@@ -559,10 +559,14 @@ export function AnimatedAIChat() {
                           exit={{ opacity: 0, scale: 0.9 }}
                           className="flex flex-col items-center gap-3 text-white/40 group"
                         >
-                          <div className="w-12 h-12 rounded-2xl bg-white/[0.03] group-hover:bg-white/[0.08] transition-colors flex items-center justify-center cursor-pointer">
-                            <UploadCloud className="w-5 h-5 group-hover:text-white/90 transition-colors" />
-                          </div>
-                          <div className="text-xs font-medium">Click to attach a .har file</div>
+                            <div className="w-24 h-24 rounded-full bg-white/[0.02] border border-white/5 flex items-center justify-center mb-6 relative overflow-hidden backdrop-blur-sm group">
+                                <div className="absolute inset-0 bg-gradient-to-tr from-violet-500/10 to-transparent pointer-events-none" />
+                                <Server className="w-10 h-10 text-white/20 group-hover:text-white/60 transition-colors" />
+                            </div>
+                            <h2 className="text-2xl font-heading font-medium tracking-tight text-white/90 mb-3">No reserves available right now</h2>
+                            <p className="text-white/40 text-sm max-w-sm text-center leading-relaxed">
+                                You currently have no active MCP server reserves. Start by configuring a new reserve on the home page.
+                            </p>
                         </motion.div>
                       )}
                     </AnimatePresence>
@@ -625,42 +629,10 @@ export function AnimatedAIChat() {
                           <div className="w-3 h-3 rounded-full border border-white/20 border-t-white/80 animate-spin" />
                           Generating...
                         </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-3 h-3" />
-                          Generate
-                        </>
-                      )}
-                    </motion.button>
-                  </div>
-                </motion.div>
-              </div>
+                    )}
 
-              {/* Error banner */}
-              <AnimatePresence>
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    className="w-full max-w-md mx-auto -mt-6 flex items-start gap-3 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs"
-                  >
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
-                    <span>{error}</span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Output section */}
-              {result ? (
-                <ResultCards result={result} serverName={serverName} />
-              ) : (
-                <PlaceholderCards />
-              )}
-            </>
-          )}
+                </div>
+            </main>
         </div>
-      </main>
-    </div>
-  );
+    );
 }

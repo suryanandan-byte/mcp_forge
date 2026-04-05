@@ -45,6 +45,11 @@ async def save_server_to_registry(server_name: str, task_desc: str, response: Ge
     readme_path = os.path.join(SERVERS_DIR, f"{server_name}_README.md")
     async with aiofiles.open(readme_path, mode='w') as f:
         await f.write(response.readme)
+
+    # Write Claude config JSON
+    config_path = os.path.join(SERVERS_DIR, f"{server_name}_config.json")
+    async with aiofiles.open(config_path, mode='w') as f:
+        await f.write(json.dumps(response.claude_config, indent=2))
     
     new_item = RegistryServerItem(
         name=server_name,
